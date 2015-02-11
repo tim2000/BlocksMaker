@@ -31,6 +31,7 @@ var nbColor = 9;
 var selectedLine;
 var selectedCol;
 
+var checkGridCounter = 0;
 var score = 0;
 
 var KEYLEFT = 37;
@@ -62,12 +63,20 @@ var TIMER_START = 120;
 var mode;
 var onPlay = false;
 var currentPage = MENU_PAGE;
+var found;
 
 var timer = TIMER_START;
 var timerInterval;
 
+var scoreByBlocks = 0;
 var bestScore = 350;
 
+var startCounter;
+
+var counterBeforeStart;
+
+var firstMoveMade = false;
+var firstSquareMade = false;
 ctx.beginPath();
 
 var refArray = [];
@@ -78,37 +87,99 @@ drawGrid();
 document.getElementById('htmlBestScore').value = bestScore;
 
 document.addEventListener("mousemove",onMove, false);
-document.addEventListener("keydown",keydownHandler, false);
+
 
 function launchTutoGame()
 {
-    if(!onPlay)
+    stopPlaying();
+    document.addEventListener("keydown",keydownHandler, false);
+
+    mode = MODE_TUTO;
+    rectSize = RECT_SIZE_MODE_0;
+    nbRect = NBRECT_MODE_0;
+    
+    //Init array
+    onPlay = true;
+    nbColor = 4;
+    initRefArray();        
+
+    //Just to be sure to start without a pre-made block
+    scoreByBlocks = 0;
+    checkGrid3x3();
+    checkGrid2x2();
+    drawGrid();
+    
+    //init game score
+    score = 0;
+    scoreByBlocks = 0;
+
+    firstMoveMade = false;
+    firstSquareMade = false;
+
+    document.getElementById('htmlTimer').value = '';
+    document.getElementById('htmlScore').value = '';
+    writeMsgOnGrid("Put the mouse cursor into a square then try to press z, q, s, d");
+}
+
+function prepareToLaunch()
+{
+    startCounter = 3;
+    counterBeforeStart = setInterval(startMessageHandler,1000);
+    startMessageHandler();
+}
+
+function startMessageHandler()
+{
+    writeTimeBeforeStart(startCounter)
+
+    if(startCounter == 0)
     {
-        onPlay = true;
-        mode = MODE_TUTO;
-        nbColor = 4;
-        rectSize = RECT_SIZE_MODE_0;
-        nbRect = NBRECT_MODE_0;
-        initRefArray();
         drawGrid();
+        launch();
     }
+
+    startCounter--;
 }
 
 function launchTimerGame()
 {
-    if(!onPlay)
-    {
-        onPlay = true;
-        mode = MODE_TIMER;
-        nbColor = 8;
-        rectSize = RECT_SIZE_MODE_1;
-        nbRect = NBRECT_MODE_1;
-        initRefArray();
-        drawGrid();
-        timer = TIMER_START;
-        timerInterval = setInterval(timerTic, 1000);
-        document.getElementById('htmlTimer').value = timer;
-    }
+    stopPlaying();
+
+
+    mode = MODE_TIMER;
+    rectSize = RECT_SIZE_MODE_1;
+    nbRect = NBRECT_MODE_1;
+    
+    //Init array
+    onPlay = true;
+    nbColor = 8;
+    initRefArray();
+    
+    //Just to be sure to start without a pre-made block
+    scoreByBlocks = 0;
+    checkGrid3x3();
+    checkGrid2x2();
+    drawGrid();
+
+    //init game timer
+    timer = TIMER_START;
+    
+    //init game score
+    score = 0;
+    scoreByBlocks = SCORE_3X3;
+    
+    document.getElementById('htmlTimer').value = timer;
+    document.getElementById('htmlScore').value = score;
+
+    prepareToLaunch();
+}
+
+function launch()
+{
+    clearInterval(counterBeforeStart);
+
+    document.addEventListener("keydown",keydownHandler, false);
+    timerInterval = setInterval(timerTic, 1000);
 }
 
 function stopPlaying()
@@ -118,7 +189,6 @@ function stopPlaying()
     initRefArray();
     drawGrid();
     document.getElementById('htmlTimer').value = '';
-
 }
 
 function timerTic()
@@ -144,42 +214,64 @@ function keydownHandler(event)
         return;
 
     var keyCode = event.keyCode;
-    
+    var dir;
+    found = false;
+
     switch(keyCode)
     {
         case KEYDOWN:
         case KEYDOWN_2:
             selectedCol = Math.floor(curX/rectSize);
             slideColBot();
+            dir = "down" ;
             break;
         case KEYUP:
         case KEYUP_2:
             selectedCol = Math.floor(curX/rectSize);
             slideColTop();
+            dir = "up";
             break;
         case KEYLEFT:
         case KEYLEFT_2:
             selectedLine = Math.floor(curY/rectSize);
             slideLineLeft();
+            dir = "left";
             break;
         case KEYRIGHT:
         case KEYRIGHT_2:
             selectedLine = Math.floor(curY/rectSize);
             slideLineRight();
+            dir = "right";
             break;
     }
 
     if(mode == MODE_TUTO)
     {
         checkGrid2x2();
+        
+        if(!firstMoveMade)
+        {
+            firstMoveMade = true;
+            drawGrid();
+            writeMsgOnGrid("Did you get it ? You move it "+dir+". Now try to make a 2x2 square");
+        }
+        else if((!firstSquareMade) && found)
+        {
+            firstSquareMade = true;
+            drawGrid();
+            writeMsgOnGrid("Nice move, you can now play in normal mode or continue training.");
+        }
+        else
+        {
+            drawGrid();
+        }
     }
     else
     {
         checkGrid3x3();
+        document.getElementById('htmlScore').value = score;
+        drawGrid();
     }
-
-    document.getElementById('htmlScore').value = score;
-    drawGrid()
 }
 
 function onMove(event)
@@ -200,13 +292,15 @@ function checkGrid2x2()
                 {
                     if(refArray[i][j] == refArray[i+1][j+1])
                     {
-                        score += SCORE_2X2;
+                        score += scoreByBlocks;
                         
                         if(mode != MODE_TUTO)
+                        {
                             timer += TIMER_2X2;
-
-                        document.getElementById('htmlScore').value = score;
+                            document.getElementById('htmlScore').value = score;
+                        }
                         
+                        found = true;
                         repopulateArray(i, j, 2);
                     }
                 }
@@ -237,10 +331,12 @@ function checkGrid3x3()
                                     {
                                         if(refArray[i][j] == refArray[i+2][j+2])
                                         {
-                                            score += SCORE_3X3;
-                                            timer += TIMER_3X3;
+                                            score += scoreByBlocks;
+
                                             document.getElementById('htmlScore').value = score;
                                             document.getElementById('htmlTimer').value = timer;
+
+                                            found = true;
                                             repopulateArray(i, j, 3);
                                         }
                                     }
@@ -253,6 +349,7 @@ function checkGrid3x3()
         }
     }
 }
+
 
 function repopulateArray(i, j, size)
 {
@@ -323,6 +420,29 @@ function initRefArray()
             refArray[i].push(getRandomStringColor());
         }   
     }
+}
+
+function writeMsgOnGrid(msg)
+{
+    ctx.fillStyle="black";
+    ctx.globalAlpha=0.8;
+    ctx.fillRect(0,205, 800, 80);
+    ctx.fillStyle = "white";
+    ctx.font = "bold 20px Arial";
+    ctx.fillText(msg, 100, 250);
+    ctx.globalAlpha=1;
+}
+
+function writeTimeBeforeStart(msg)
+{
+    drawGrid();
+    ctx.fillStyle="black";
+    ctx.globalAlpha=0.8;
+    ctx.fillRect(0,205, 800, 80);
+    ctx.fillStyle = "white";
+    ctx.font = "bold 20px Arial";
+    ctx.fillText(msg, 398, 250);
+    ctx.globalAlpha=1;
 }
 
 function drawGrid()
